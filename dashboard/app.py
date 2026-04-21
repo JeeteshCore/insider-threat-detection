@@ -525,5 +525,8 @@ def export_pdf():
         return f"PDF generation error: {e}", 500
 
 
+import os
+
 if __name__ == "__main__":
-    app.run(debug=True, use_reloader=False)  # FIXED: use_reloader=False prevents double scheduler start
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
