@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CyberShield — Access Control</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=JetBrains+Mono:wght@400;500;700&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg0:    #020609;
+  --bg1:    #060d12;
+  --bg2:    #0a1620;
+  --cyan:   #00e5ff;
+  --green:  #00ffa3;
+  --red:    #ff2952;
+  --orange: #ff8c00;
+  --txt1:   #d4eaf7;
+  --txt2:   #6a9ab8;
+  --txt3:   #2d5570;
+  --border: rgba(0,229,255,0.1);
+  --border2:rgba(0,229,255,0.22);
+  --glow:   rgba(0,229,255,0.18);
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+
+body {
+  min-height: 100vh;
+  background: var(--bg0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Exo 2', sans-serif;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 32px 0;
+}
+
+/* Animated grid bg */
+body::before {
+  content:''; position:fixed; inset:0;
+  background-image:
+    linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+  background-size: 44px 44px;
+  animation: gridDrift 18s linear infinite;
+  pointer-events:none; z-index:0;
+}
+@keyframes gridDrift {
+  0%   { background-position: 0 0; }
+  100% { background-position: 44px 44px; }
+}
+
+/* Scan line */
+body::after {
+  content:''; position:fixed; left:0; right:0; height:1px;
+  background: linear-gradient(90deg,transparent,var(--cyan),transparent);
+  opacity:.12; z-index:1; pointer-events:none;
+  animation: scan 7s linear infinite;
+}
+@keyframes scan { 0%{top:-2px} 100%{top:100vh} }
+
+/* Corner decorations */
+.corner { position:fixed; width:60px; height:60px; }
+.corner.tl { top:20px; left:20px; border-top:1px solid var(--border2); border-left:1px solid var(--border2); }
+.corner.tr { top:20px; right:20px; border-top:1px solid var(--border2); border-right:1px solid var(--border2); }
+.corner.bl { bottom:20px; left:20px; border-bottom:1px solid var(--border2); border-left:1px solid var(--border2); }
+.corner.br { bottom:20px; right:20px; border-bottom:1px solid var(--border2); border-right:1px solid var(--border2); }
+
+.wrapper {
+  position:relative; z-index:2;
+  width:100%; max-width:420px;
+  padding: 0 20px;
+  animation: slideUp .5s ease both;
+}
+@keyframes slideUp {
+  from{opacity:0;transform:translateY(24px)}
+  to  {opacity:1;transform:translateY(0)}
+}
+
+/* Logo */
+.logo {
+  text-align:center; margin-bottom:32px;
+  display:flex; flex-direction:column; align-items:center; gap:12px;
+}
+
+.logo-shield {
+  width:64px; height:64px; border-radius:16px;
+  background: linear-gradient(135deg,#003d55,#006080);
+  border:1px solid var(--border2);
+  display:flex; align-items:center; justify-content:center;
+  font-size:30px;
+  box-shadow: 0 0 30px var(--glow), 0 0 60px rgba(0,229,255,0.06);
+  position:relative; overflow:hidden;
+}
+.logo-shield::after {
+  content:''; position:absolute; inset:0;
+  background: conic-gradient(transparent 0deg,rgba(0,229,255,0.12) 60deg,transparent 120deg);
+  animation: spin 4s linear infinite;
+}
+@keyframes spin { to{transform:rotate(360deg)} }
+
+.logo-name {
+  font-family:'Orbitron',monospace;
+  font-size:26px; font-weight:900;
+  color:var(--cyan);
+  letter-spacing:4px;
+  text-shadow:0 0 20px rgba(0,229,255,0.4);
+}
+.logo-sub {
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; color:var(--txt3);
+  letter-spacing:4px; text-transform:uppercase;
+}
+
+/* Card */
+.card {
+  background: var(--bg1);
+  border:1px solid var(--border2);
+  border-radius:18px;
+  overflow:hidden;
+  box-shadow:0 0 40px rgba(0,229,255,0.07),0 20px 60px rgba(0,0,0,0.5);
+}
+
+/* Tabs */
+.tabs {
+  display:grid; grid-template-columns:1fr 1fr;
+  border-bottom:1px solid var(--border);
+}
+.tab {
+  padding:14px; text-align:center;
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px; letter-spacing:3px; text-transform:uppercase;
+  color:var(--txt3); cursor:pointer;
+  background:transparent; border:none;
+  transition:all .2s;
+  position:relative;
+}
+.tab::after {
+  content:''; position:absolute; bottom:0; left:20%; right:20%; height:2px;
+  background:var(--cyan); border-radius:2px;
+  opacity:0; transform:scaleX(0);
+  transition:all .25s;
+}
+.tab.active { color:var(--cyan); background:rgba(0,229,255,0.04); }
+.tab.active::after { opacity:1; transform:scaleX(1); }
+.tab:hover:not(.active) { color:var(--txt2); }
+
+/* Forms */
+.form-wrap { padding:28px 28px 24px; }
+
+.form-panel { display:none; }
+.form-panel.active { display:block; animation:fadeIn .2s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+.field { margin-bottom:18px; }
+
+.field label {
+  display:block; margin-bottom:6px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; letter-spacing:3px; text-transform:uppercase;
+  color:var(--txt3);
+}
+
+.field input, .field select {
+  width:100%; padding:11px 14px;
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:9px;
+  color:var(--txt1);
+  font-family:'Exo 2',sans-serif; font-size:14px;
+  outline:none;
+  transition:border-color .2s, box-shadow .2s;
+  appearance:none;
+}
+
+.field input:focus, .field select:focus {
+  border-color:var(--cyan);
+  box-shadow:0 0 0 3px rgba(0,229,255,0.08);
+}
+
+.field input::placeholder { color:var(--txt3); }
+
+.field select option { background:var(--bg2); }
+
+/* Password toggle */
+.input-wrap { position:relative; }
+.input-wrap input { padding-right:44px; }
+.pw-toggle {
+  position:absolute; right:12px; top:50%; transform:translateY(-50%);
+  background:none; border:none; cursor:pointer;
+  color:var(--txt3); font-size:16px; line-height:1;
+  transition:color .2s;
+}
+.pw-toggle:hover { color:var(--cyan); }
+
+/* Password strength bar */
+.strength-bar {
+  height:3px; border-radius:2px;
+  background:var(--bg0); margin-top:6px;
+  overflow:hidden;
+}
+.strength-fill {
+  height:100%; width:0; border-radius:2px;
+  transition:width .3s, background .3s;
+}
+
+/* Error box */
+.error-box {
+  background:rgba(255,41,82,0.08);
+  border:1px solid rgba(255,41,82,0.25);
+  border-left:3px solid var(--red);
+  border-radius:8px; padding:10px 14px;
+  margin-bottom:18px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px; color:var(--red);
+  display:flex; align-items:center; gap:8px;
+}
+
+/* Submit button */
+.btn-submit {
+  width:100%; padding:13px;
+  background: linear-gradient(135deg,#004d66,#007a99);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  color:var(--cyan);
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px; letter-spacing:3px; text-transform:uppercase;
+  cursor:pointer; font-weight:700;
+  transition:all .2s;
+  box-shadow:0 0 20px rgba(0,229,255,0.08);
+  margin-top:8px;
+}
+.btn-submit:hover {
+  background:linear-gradient(135deg,#005d7a,#009ab8);
+  box-shadow:0 0 30px rgba(0,229,255,0.18);
+  transform:translateY(-1px);
+}
+.btn-submit:active { transform:translateY(0); }
+
+/* Row for two fields */
+.field-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+
+/* Footer */
+.card-footer {
+  padding:12px 28px 18px;
+  text-align:center;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; color:var(--txt3); letter-spacing:2px;
+  border-top:1px solid var(--border);
+}
+
+/* Password requirements list */
+.pw-reqs {
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; color:var(--txt3);
+  margin-top:6px; line-height:1.8;
+  list-style:none;
+}
+.pw-reqs li::before { content:'○ '; }
+.pw-reqs li.ok { color:var(--green); }
+.pw-reqs li.ok::before { content:'✓ '; }
+
+.match-hint {
+  display: none;
+  margin-top: 6px;
+  font-family:'JetBrains Mono',monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+
+.match-hint.error {
+  display: block;
+  color: var(--red);
+}
+
+.match-hint.success {
+  display: block;
+  color: var(--green);
+}
+
+@media (max-height: 780px) {
+  body {
+    align-items: flex-start;
+  }
+
+  .wrapper {
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+}
+
+@media (max-width: 520px) {
+  .field-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .form-wrap {
+    padding: 24px 20px 20px;
+  }
+
+  .card-footer {
+    padding-left: 20px;
+    padding-right: 20px;
+    line-height: 1.6;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<div class="wrapper">
+
+  <div class="logo">
+    <div class="logo-shield">🛡️</div>
+    <div class="logo-name">CYBERSHIELD</div>
+    <div class="logo-sub">Insider Threat Detection System</div>
+  </div>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab {% if active_tab=='signin' %}active{% endif %}"
+              onclick="switchTab('signin')" id="tab-signin">
+        Sign In
+      </button>
+      <button class="tab {% if active_tab=='signup' %}active{% endif %}"
+              onclick="switchTab('signup')" id="tab-signup">
+        Sign Up
+      </button>
+    </div>
+
+    <div class="form-wrap">
+
+      {% if error %}
+      <div class="error-box">⚠ {{ error }}</div>
+      {% endif %}
+
+      <div class="form-panel {% if active_tab=='signin' %}active{% endif %}" id="panel-signin">
+        <form method="POST" action="/login">
+          <div class="field">
+            <label>Username</label>
+            <input type="text" name="username" placeholder="Enter your username"
+                   autocomplete="username" required>
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <div class="input-wrap">
+              <input type="password" name="password" id="pw-signin"
+                     placeholder="Enter your password"
+                     autocomplete="current-password" required>
+              <button type="button" class="pw-toggle" onclick="togglePw('pw-signin',this)">👁</button>
+            </div>
+          </div>
+          <button type="submit" class="btn-submit">⟶ &nbsp; ACCESS SYSTEM</button>
+        </form>
+      </div>
+
+      <div class="form-panel {% if active_tab=='signup' %}active{% endif %}" id="panel-signup">
+        <form method="POST" action="/signup">
+          <div class="field-row">
+            <div class="field">
+              <label>Username</label>
+              <input type="text" name="username" placeholder="min. 3 chars"
+                     autocomplete="off" minlength="3" required>
+            </div>
+            <div class="field">
+              <label>Role</label>
+              <select name="role">
+                <option value="analyst">Analyst</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Email Address</label>
+            <input type="email" name="email" placeholder="your@email.com"
+                   autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <div class="input-wrap">
+              <input type="password" name="password" id="pw-signup"
+                     placeholder="min. 8 chars"
+                     autocomplete="new-password"
+                     oninput="checkStrength(this.value)"
+                     required>
+              <button type="button" class="pw-toggle" onclick="togglePw('pw-signup',this)">👁</button>
+            </div>
+            <div class="strength-bar"><div class="strength-fill" id="strength-fill"></div></div>
+            <ul class="pw-reqs" id="pw-reqs">
+              <li id="req-len">At least 8 characters</li>
+              <li id="req-upper">One uppercase letter</li>
+              <li id="req-num">One number</li>
+            </ul>
+          </div>
+          <div class="field">
+            <label>Confirm Password</label>
+            <div class="input-wrap">
+              <input type="password" name="confirm_password" id="pw-confirm"
+                     placeholder="Repeat password"
+                     oninput="checkPasswordMatch()"
+                     autocomplete="new-password" required>
+              <button type="button" class="pw-toggle" onclick="togglePw('pw-confirm',this)">👁</button>
+            </div>
+            <div class="match-hint" id="match-hint"></div>
+          </div>
+          <button type="submit" class="btn-submit">⟶ &nbsp; CREATE ACCOUNT</button>
+        </form>
+      </div>
+
+    </div>
+
+    <div class="card-footer">CYBERSHIELD v2.0 &nbsp;·&nbsp; SECURE ACCESS &nbsp;·&nbsp; AI-POWERED UEBA</div>
+  </div>
+
+</div>
+
+<script>
+function switchTab(tab) {
+  ['signin','signup'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+    document.getElementById('panel-'+t).classList.toggle('active', t===tab);
+  });
+}
+
+function togglePw(id, btn) {
+  const inp = document.getElementById(id);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+}
+
+function checkStrength(val) {
+  const fill = document.getElementById('strength-fill');
+  const reqs = {
+    'req-len': val.length >= 8,
+    'req-upper': /[A-Z]/.test(val),
+    'req-num': /[0-9]/.test(val),
+  };
+
+  const passed = Object.values(reqs).filter(Boolean).length;
+  Object.entries(reqs).forEach(([id, ok]) => {
+    document.getElementById(id).classList.toggle('ok', ok);
+  });
+
+  const colors = ['#ff2952','#ff8c00','#00ffa3'];
+  const widths = ['33%','66%','100%'];
+  fill.style.width = passed > 0 ? widths[passed - 1] : '0';
+  fill.style.background = passed > 0 ? colors[passed - 1] : 'transparent';
+
+  checkPasswordMatch();
+}
+
+function checkPasswordMatch() {
+  const password = document.getElementById('pw-signup');
+  const confirm = document.getElementById('pw-confirm');
+  const hint = document.getElementById('match-hint');
+
+  if (!password || !confirm || !hint) return;
+
+  const confirmValue = confirm.value.trim();
+  if (!confirmValue) {
+    hint.textContent = '';
+    hint.className = 'match-hint';
+    confirm.setCustomValidity('');
+    return;
+  }
+
+  if (password.value === confirm.value) {
+    hint.textContent = 'Passwords match';
+    hint.className = 'match-hint success';
+    confirm.setCustomValidity('');
+  } else {
+    hint.textContent = 'Passwords do not match';
+    hint.className = 'match-hint error';
+    confirm.setCustomValidity('Passwords do not match');
+  }
+}
+
+{% if active_tab == 'signup' %}
+switchTab('signup');
+{% endif %}
+</script>
+</body>
+</html>

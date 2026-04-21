@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+db/insider_threat.db
+models/threat_model.pkl
+.env
+*.db
+logs/

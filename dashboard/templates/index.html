@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CyberShield — Insider Threat Detection</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg0:#020609;--bg1:#060d12;--bg2:#0a1620;--bg3:#0e2030;
+  --cyan:#00e5ff;--green:#00ffa3;--red:#ff2952;--orange:#ff8c00;
+  --yellow:#ffd500;--purple:#b06bff;
+  --txt1:#d4eaf7;--txt2:#6a9ab8;--txt3:#2d5570;
+  --border:rgba(0,229,255,0.08);--border2:rgba(0,229,255,0.18);
+  --glow-c:rgba(0,229,255,0.25);--r:14px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg0);color:var(--txt1);font-family:'Space Grotesk',sans-serif;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,0.025) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0;animation:gridDrift 20s linear infinite}
+@keyframes gridDrift{0%{background-position:0 0}100%{background-position:48px 48px}}
+.scan-line{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 0%,var(--cyan) 40%,var(--cyan) 60%,transparent 100%);opacity:.15;pointer-events:none;z-index:999;animation:scanDown 8s linear infinite}
+@keyframes scanDown{0%{top:-2px}100%{top:100vh}}
+.app{position:relative;z-index:1;max-width:1500px;margin:0 auto;padding:0 28px 60px}
+
+/* HEADER */
+header{display:flex;align-items:center;justify-content:space-between;padding:22px 0 18px;border-bottom:1px solid var(--border2);margin-bottom:28px;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:16px}
+.brand-shield{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#003d55,#006080);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 0 24px var(--glow-c);position:relative;overflow:hidden}
+.brand-shield::after{content:'';position:absolute;inset:0;background:conic-gradient(transparent 0deg,rgba(0,229,255,0.15) 60deg,transparent 120deg);animation:spin 4s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.brand-name{font-family:'Orbitron',monospace;font-size:20px;font-weight:900;color:var(--cyan);letter-spacing:3px;text-shadow:0 0 20px rgba(0,229,255,0.4)}
+.brand-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--txt3);letter-spacing:4px;text-transform:uppercase;margin-top:2px}
+.header-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.live-pill{display:flex;align-items:center;gap:8px;padding:7px 16px;background:rgba(0,255,163,0.06);border:1px solid rgba(0,255,163,0.2);border-radius:24px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--green)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:livePulse 1.4s ease infinite}
+@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.7)}}
+.clock{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--txt2);letter-spacing:2px;background:var(--bg2);border:1px solid var(--border);padding:7px 14px;border-radius:8px}
+.user-pill{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--border2);padding:6px 14px;border-radius:24px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cyan);letter-spacing:1px}
+.role-badge{padding:2px 8px;border-radius:4px;font-size:8px;letter-spacing:2px;text-transform:uppercase;background:rgba(176,107,255,.12);border:1px solid rgba(176,107,255,.3);color:var(--purple)}
+.btn-logout{padding:7px 14px;background:rgba(255,41,82,0.08);border:1px solid rgba(255,41,82,0.25);border-radius:8px;color:var(--red);font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;cursor:pointer;text-decoration:none;transition:all .2s}
+.btn-logout:hover{background:rgba(255,41,82,0.15);border-color:rgba(255,41,82,0.5)}
+
+/* STAT CARDS */
+.stat-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:20px;position:relative;overflow:hidden;transition:transform .25s,border-color .25s;animation:fadeUp .5s ease both}
+.stat-card:hover{transform:translateY(-3px);border-color:var(--border2)}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px}
+.s-cyan::before{background:linear-gradient(90deg,transparent,var(--cyan),transparent)}
+.s-red::before{background:linear-gradient(90deg,transparent,var(--red),transparent)}
+.s-orange::before{background:linear-gradient(90deg,transparent,var(--orange),transparent)}
+.s-green::before{background:linear-gradient(90deg,transparent,var(--green),transparent)}
+.s-purple::before{background:linear-gradient(90deg,transparent,var(--purple),transparent)}
+.stat-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:3px;text-transform:uppercase;color:var(--txt3);margin-bottom:10px}
+.stat-val{font-family:'Orbitron',monospace;font-size:36px;font-weight:700;line-height:1;margin-bottom:4px}
+.s-cyan .stat-val{color:var(--cyan);text-shadow:0 0 20px rgba(0,229,255,.3)}
+.s-red .stat-val{color:var(--red);text-shadow:0 0 20px rgba(255,41,82,.3)}
+.s-orange .stat-val{color:var(--orange)}.s-green .stat-val{color:var(--green)}.s-purple .stat-val{color:var(--purple)}
+.stat-desc{font-size:11px;color:var(--txt3)}
+.stat-icon{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:32px;opacity:.06}
+
+/* FILTER BAR */
+.filter-bar{display:flex;align-items:center;gap:10px;padding:12px 18px;background:rgba(0,0,0,0.2);border-bottom:1px solid var(--border);flex-wrap:wrap}
+.search-input{flex:1;min-width:160px;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--txt1);font-family:'JetBrains Mono',monospace;font-size:11px;outline:none;transition:border-color .2s}
+.search-input:focus{border-color:var(--cyan)}
+.search-input::placeholder{color:var(--txt3)}
+.filter-btns{display:flex;gap:6px}
+.fbtn{padding:6px 14px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--txt3);transition:all .2s;text-decoration:none}
+.fbtn:hover,.fbtn.active{border-color:var(--border2);color:var(--txt1)}
+.fbtn.all.active{background:rgba(0,229,255,0.08);border-color:rgba(0,229,255,.3);color:var(--cyan)}
+.fbtn.high.active{background:rgba(255,41,82,0.08);border-color:rgba(255,41,82,.3);color:var(--red)}
+.fbtn.medium.active{background:rgba(255,140,0,0.08);border-color:rgba(255,140,0,.3);color:var(--orange)}
+.fbtn.low.active{background:rgba(0,255,163,0.07);border-color:rgba(0,255,163,.2);color:var(--green)}
+.export-btns{display:flex;gap:6px;margin-left:auto}
+.ebtn{padding:6px 12px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;transition:all .2s;text-decoration:none;display:flex;align-items:center;gap:5px}
+.ebtn.csv{background:rgba(0,255,163,0.07);border:1px solid rgba(0,255,163,0.2);color:var(--green)}
+.ebtn.pdf{background:rgba(255,41,82,0.07);border:1px solid rgba(255,41,82,0.2);color:var(--red)}
+.ebtn:hover{transform:translateY(-1px);filter:brightness(1.2)}
+
+/* LAYOUT */
+.grid-main{display:grid;grid-template-columns:1fr 1fr 360px;gap:18px;margin-bottom:18px}
+.grid-bottom{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+
+/* PANEL */
+.panel{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;animation:fadeUp .5s ease both;display:flex;flex-direction:column}
+.panel-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.25);flex-shrink:0}
+.panel-title{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--txt1);font-weight:500}
+.ptdot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.ptdot.red{background:var(--red);box-shadow:0 0 8px var(--red)}
+.ptdot.orange{background:var(--orange);box-shadow:0 0 8px var(--orange)}
+.ptdot.green{background:var(--green);box-shadow:0 0 8px var(--green)}
+.ptdot.purple{background:var(--purple);box-shadow:0 0 8px var(--purple)}
+.panel-badge{font-family:'JetBrains Mono',monospace;font-size:9px;padding:3px 10px;border-radius:20px;letter-spacing:1px;background:rgba(0,229,255,.07);border:1px solid rgba(0,229,255,.15);color:var(--cyan)}
+.panel-badge.red{background:rgba(255,41,82,.07);border-color:rgba(255,41,82,.2);color:var(--red)}
+
+/* USER TABLE */
+.risk-table{width:100%;border-collapse:collapse}
+.risk-table th{padding:10px 18px;text-align:left;font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:3px;text-transform:uppercase;color:var(--txt3);border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)}
+.risk-table td{padding:12px 18px;border-bottom:1px solid rgba(0,229,255,.04);font-size:13px;transition:background .15s}
+.risk-table tr:hover td{background:rgba(0,229,255,.03);cursor:pointer}
+.risk-table tr:last-child td{border-bottom:none}
+.uname-cell{display:flex;align-items:center;gap:10px}
+.avatar{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-size:11px;font-weight:700}
+.uname{font-family:'JetBrains Mono',monospace;font-size:12px}
+.score-wrap{display:flex;align-items:center;gap:10px}
+.score-num{font-family:'Orbitron',monospace;font-size:16px;font-weight:700;min-width:32px}
+.bar-bg{flex:1;height:4px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden}
+.bar-fill{height:100%;border-radius:2px;transition:width .8s ease}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;font-weight:600}
+.badge.high{background:rgba(255,41,82,.12);border:1px solid rgba(255,41,82,.35);color:var(--red)}
+.badge.medium{background:rgba(255,140,0,.1);border:1px solid rgba(255,140,0,.3);color:var(--orange)}
+.badge.low{background:rgba(0,255,163,.07);border:1px solid rgba(0,255,163,.2);color:var(--green)}
+.bdot{width:5px;height:5px;border-radius:50%}
+.badge.high .bdot{background:var(--red);animation:livePulse 1s infinite}
+.badge.medium .bdot{background:var(--orange)}
+.badge.low .bdot{background:var(--green)}
+.ai-badge{font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(176,107,255,0.1);border:1px solid rgba(176,107,255,0.25);color:var(--purple)}
+
+/* CHART */
+.chart-wrap{padding:16px 20px;flex:1;display:flex;align-items:center;justify-content:center;min-height:200px}
+.chart-wrap canvas{max-height:280px}
+
+/* ALERTS */
+.alerts-scroll{overflow-y:auto;max-height:320px;flex:1}
+.alert-item{display:flex;gap:12px;padding:12px 18px;border-bottom:1px solid rgba(0,229,255,.04);align-items:flex-start;transition:background .15s}
+.alert-item:hover{background:rgba(0,229,255,.02)}
+.alert-item:last-child{border-bottom:none}
+.alert-ico{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-top:1px}
+.alert-ico.critical{background:rgba(255,41,82,.12);border:1px solid rgba(255,41,82,.25)}
+.alert-ico.warning{background:rgba(255,140,0,.1);border:1px solid rgba(255,140,0,.25)}
+.alert-body{flex:1;min-width:0}
+.alert-user{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cyan);margin-bottom:3px}
+.alert-msg{font-size:11px;color:var(--txt2);line-height:1.4}
+.alert-time{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--txt3);margin-top:4px}
+.sev-pill{font-family:'JetBrains Mono',monospace;font-size:8px;padding:2px 7px;border-radius:3px;letter-spacing:1px;text-transform:uppercase;flex-shrink:0;align-self:flex-start;margin-top:2px}
+.sev-pill.critical{background:rgba(255,41,82,.12);color:var(--red);border:1px solid rgba(255,41,82,.25)}
+.sev-pill.warning{background:rgba(255,140,0,.1);color:var(--orange);border:1px solid rgba(255,140,0,.25)}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal{background:var(--bg1);border:1px solid var(--border2);border-radius:18px;width:660px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 0 60px rgba(0,229,255,.1);animation:slideUp .3s ease}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg1);z-index:1}
+.modal-avatar{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-size:20px;font-weight:700}
+.modal-uname{font-family:'Orbitron',monospace;font-size:16px;font-weight:700}
+.modal-close{width:32px;height:32px;border-radius:8px;background:var(--bg2);border:1px solid var(--border);color:var(--txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s}
+.modal-close:hover{background:var(--bg3);color:var(--txt1)}
+.modal-body{padding:20px 24px}
+.modal-stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.m-stat{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center}
+.m-stat-val{font-family:'Orbitron',monospace;font-size:22px;font-weight:700;margin-bottom:4px}
+.m-stat-lbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--txt3)}
+.modal-section{margin-bottom:18px}
+.modal-sec-title{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--txt3);margin-bottom:10px}
+.reason-box{background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--cyan);border-radius:8px;padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--txt2);line-height:1.6}
+.log-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--txt2)}
+.log-tag{padding:2px 7px;border-radius:4px;font-size:8px;letter-spacing:1px;text-transform:uppercase;flex-shrink:0}
+.log-tag.success{background:rgba(0,255,163,.1);color:var(--green)}
+.log-tag.failed{background:rgba(255,41,82,.12);color:var(--red)}
+.log-tag.offhrs{background:rgba(255,213,0,.1);color:var(--yellow)}
+.log-tag.sens{background:rgba(255,41,82,.12);color:var(--red)}
+.log-tag.normal{background:rgba(0,229,255,.07);color:var(--cyan)}
+.trend-mini{padding:12px 0 0;height:120px}
+
+/* FOOTER */
+footer{text-align:center;margin-top:32px;padding-top:20px;border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--txt3);letter-spacing:4px}
+.no-data{padding:40px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--txt3);letter-spacing:2px}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+
+@media(max-width:1200px){.grid-main{grid-template-columns:1fr 1fr}.grid-bottom{grid-template-columns:1fr 1fr}.stat-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:768px){.grid-main{grid-template-columns:1fr}.grid-bottom{grid-template-columns:1fr}.stat-row{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<div class="scan-line"></div>
+
+<div class="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="brand">
+      <div class="brand-shield">🛡️</div>
+      <div>
+        <div class="brand-name">CYBERSHIELD</div>
+        <div class="brand-sub">Insider Threat Detection System · v2.0</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="live-pill"><div class="live-dot"></div>LIVE MONITOR</div>
+      <div class="clock" id="clock">00:00:00</div>
+      <div class="user-pill">
+        👤 {{ current_user }}
+        <span class="role-badge">{{ current_role }}</span>
+      </div>
+      <a href="/logout" class="btn-logout">⏻ LOGOUT</a>
+    </div>
+  </header>
+
+  <!-- STAT CARDS -->
+  <div class="stat-row">
+    <div class="stat-card s-cyan" style="animation-delay:.05s">
+      <div class="stat-label">Total Users</div>
+      <div class="stat-val">{{ stats.total_users }}</div>
+      <div class="stat-desc">Monitored accounts</div>
+      <div class="stat-icon">👤</div>
+    </div>
+    <div class="stat-card s-red" style="animation-delay:.1s">
+      <div class="stat-label">High Risk</div>
+      <div class="stat-val">{{ stats.high_risk }}</div>
+      <div class="stat-desc">Critical threats</div>
+      <div class="stat-icon">⚠️</div>
+    </div>
+    <div class="stat-card s-orange" style="animation-delay:.15s">
+      <div class="stat-label">Total Alerts</div>
+      <div class="stat-val">{{ stats.total_alerts }}</div>
+      <div class="stat-desc">Generated alerts</div>
+      <div class="stat-icon">🚨</div>
+    </div>
+    <div class="stat-card s-green" style="animation-delay:.2s">
+      <div class="stat-label">Login Events</div>
+      <div class="stat-val">{{ stats.total_events }}</div>
+      <div class="stat-desc">Total tracked</div>
+      <div class="stat-icon">🔐</div>
+    </div>
+    <div class="stat-card s-purple" style="animation-delay:.25s">
+      <div class="stat-label">Sensitive Hits</div>
+      <div class="stat-val">{{ stats.sensitive_hits }}</div>
+      <div class="stat-desc">Sensitive file access</div>
+      <div class="stat-icon">🗂️</div>
+    </div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="grid-main">
+
+    <!-- User Risk Table -->
+    <div class="panel" style="animation-delay:.1s">
+      <div class="panel-head">
+        <div class="panel-title"><div class="ptdot"></div>User Risk Analysis</div>
+        <span class="panel-badge">{{ users|length }} USERS</span>
+      </div>
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <form method="GET" action="/" style="display:flex;gap:10px;flex:1;align-items:center;flex-wrap:wrap">
+          <input class="search-input" type="text" name="search"
+                 placeholder="🔍  Search username..." value="{{ search }}">
+          <div class="filter-btns">
+            <button type="submit" name="level" value="all"
+                    class="fbtn all {% if filter_level=='all' %}active{% endif %}">ALL</button>
+            <button type="submit" name="level" value="high"
+                    class="fbtn high {% if filter_level=='high' %}active{% endif %}">HIGH</button>
+            <button type="submit" name="level" value="medium"
+                    class="fbtn medium {% if filter_level=='medium' %}active{% endif %}">MED</button>
+            <button type="submit" name="level" value="low"
+                    class="fbtn low {% if filter_level=='low' %}active{% endif %}">LOW</button>
+          </div>
+        </form>
+        <div class="export-btns">
+          <a href="/export/csv" class="ebtn csv">⬇ CSV</a>
+          <a href="/export/pdf" class="ebtn pdf">⬇ PDF</a>
+        </div>
+      </div>
+      <table class="risk-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Rule Score</th>
+            <th style="min-width:90px">AI Score</th>
+            <th>Threat Level</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          {% set lvl = u.risk_level|lower %}
+          <tr onclick="openModal('{{ u.username }}')" title="Click for user details">
+            <td>
+              <div class="uname-cell">
+                <div class="avatar" style="{% if lvl=='high' %}background:rgba(255,41,82,.12);border:1px solid rgba(255,41,82,.3);color:#ff2952{% elif lvl=='medium' %}background:rgba(255,140,0,.1);border:1px solid rgba(255,140,0,.3);color:#ff8c00{% else %}background:rgba(0,255,163,.07);border:1px solid rgba(0,255,163,.2);color:#00ffa3{% endif %}">
+                  {{ u.username[0]|upper }}
+                </div>
+                <span class="uname">{{ u.username }}</span>
+              </div>
+            </td>
+            <td>
+              <div class="score-wrap">
+                <span class="score-num" style="color:{% if lvl=='high' %}#ff2952{% elif lvl=='medium' %}#ff8c00{% else %}#00ffa3{% endif %}">{{ u.score }}</span>
+                <div class="bar-bg">
+                  <div class="bar-fill" style="width:{{ u.score }}%;background:{% if lvl=='high' %}linear-gradient(90deg,#ff2952,#ff6b7a){% elif lvl=='medium' %}linear-gradient(90deg,#ff8c00,#ffcc00){% else %}linear-gradient(90deg,#00ffa3,#00e5ff){% endif %}"></div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div style="display:flex;flex-direction:column;gap:3px">
+  <span style="font-family:'Orbitron',monospace;font-size:14px;font-weight:700;color:#b06bff;">
+    {{ u.ai_score if u.ai_score else 0 }}
+  </span>
+  <div style="width:60px;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden">
+    <div style="width:{{ u.ai_score if u.ai_score else 0 }}%;height:100%;background:linear-gradient(90deg,#b06bff,#e040fb);border-radius:2px"></div>
+  </div>
+</div>
+            </td>
+            <td>
+              <span class="badge {{ lvl }}"><span class="bdot"></span>{{ lvl|upper }}</span>
+            </td>
+            <td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--txt3)">
+              {{ u.timestamp[:16] if u.timestamp else 'N/A' }}
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not users %}
+          <tr><td colspan="5" class="no-data">NO USERS FOUND</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Bar Chart -->
+    <div class="panel" style="animation-delay:.15s">
+      <div class="panel-head">
+        <div class="panel-title"><div class="ptdot orange"></div>Score Distribution</div>
+        <span class="panel-badge">BAR CHART</span>
+      </div>
+      <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="panel" style="animation-delay:.2s">
+      <div class="panel-head">
+        <div class="panel-title"><div class="ptdot red"></div>Live Alerts</div>
+        <span class="panel-badge red">{{ alerts|length }}</span>
+      </div>
+      <div class="alerts-scroll">
+        {% if alerts %}
+          {% for a in alerts %}
+          <div class="alert-item">
+            <div class="alert-ico {% if a.severity=='critical' %}critical{% else %}warning{% endif %}">
+              {% if a.severity=='critical' %}🚨{% else %}⚠️{% endif %}
+            </div>
+            <div class="alert-body">
+              <div class="alert-user">{{ a.username }}</div>
+              <div class="alert-msg">{{ a.alert_type }} — {{ a.message[:55] }}{% if a.message|length>55 %}...{% endif %}</div>
+              <div class="alert-time">{{ a.timestamp[:16] if a.timestamp else '' }}</div>
+            </div>
+            <div class="sev-pill {% if a.severity=='critical' %}critical{% else %}warning{% endif %}">{{ a.severity|upper }}</div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="no-data">NO ALERTS DETECTED</div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BOTTOM GRID -->
+  <div class="grid-bottom">
+
+    <div class="panel" style="animation-delay:.25s">
+      <div class="panel-head">
+        <div class="panel-title"><div class="ptdot purple"></div>Risk Distribution</div>
+        <span class="panel-badge">DOUGHNUT</span>
+      </div>
+      <div class="chart-wrap" style="min-height:260px"><canvas id="doughnutChart"></canvas></div>
+    </div>
+
+    <div class="panel" style="animation-delay:.3s">
+      <div class="panel-head">
+        <div class="panel-title"><div class="ptdot red"></div>Threat Vector Analysis</div>
+        <span class="panel-badge">RADAR</span>
+      </div>
+      <div class="chart-wrap" style="min-height:260px"><canvas id="radarChart"></canvas></div>
+    </div>
+
+    <div class="panel" style="animation-delay:.35s">
+      <div class="panel-head">
+        <div class="panel-title"><div class="ptdot green"></div>Score Trend</div>
+        <span class="panel-badge" id="trend-user-label">SYSTEM-WIDE</span>
+      </div>
+      <div class="chart-wrap" style="min-height:260px"><canvas id="trendChart"></canvas></div>
+    </div>
+
+  </div>
+
+  <footer>CYBERSHIELD v2.0 &nbsp;·&nbsp; AI-POWERED UEBA &nbsp;·&nbsp; INSIDER THREAT DETECTION</footer>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div class="modal-avatar" id="modal-avatar">?</div>
+        <div>
+          <div class="modal-uname" id="modal-uname">Loading...</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--txt3);margin-top:3px" id="modal-updated"></div>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-stats-row">
+        <div class="m-stat">
+          <div class="m-stat-val" id="m-score" style="color:var(--cyan)">—</div>
+          <div class="m-stat-lbl">Rule Score</div>
+        </div>
+        <div class="m-stat">
+          <div class="m-stat-val" id="m-ai-score" style="color:var(--purple)">—</div>
+          <div class="m-stat-lbl">AI Score</div>
+        </div>
+        <div class="m-stat">
+          <div class="m-stat-val" id="m-failed" style="color:var(--red)">—</div>
+          <div class="m-stat-lbl">Failed Logins</div>
+        </div>
+        <div class="m-stat">
+          <div class="m-stat-val" id="m-sens" style="color:var(--orange)">—</div>
+          <div class="m-stat-lbl">Sensitive Files</div>
+        </div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-sec-title">Risk Reason</div>
+        <div class="reason-box" id="m-reason">Loading...</div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-sec-title">Score History Trend</div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px">
+          <canvas id="modalTrendChart" height="80"></canvas>
+        </div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-sec-title">Recent Login Activity</div>
+        <div id="m-logins">Loading...</div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-sec-title">Recent File Access (last 5)</div>
+        <div id="m-files-list">Loading...</div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-sec-title">Privilege Changes</div>
+        <div id="m-privs">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Clock
+function tick(){document.getElementById('clock').textContent=new Date().toTimeString().split(' ')[0]}
+tick(); setInterval(tick,1000);
+
+// ── Chart defaults
+Chart.defaults.color='#6a9ab8';
+Chart.defaults.borderColor='rgba(0,229,255,0.06)';
+Chart.defaults.font.family="'JetBrains Mono',monospace";
+Chart.defaults.font.size=11;
+
+let modalTrendChartInst = null;
+let trendChartInst      = null;
+
+// ── Fetch + render all charts
+fetch('/api/chart-data').then(r=>r.json()).then(data=>{
+  renderBar(data.bar);
+  renderDoughnut(data.doughnut);
+  renderRadar(data.radar);
+  renderTrend();
+}).catch(e=>console.warn('Chart error:',e));
+
+function renderBar(d){
+  new Chart(document.getElementById('barChart'),{
+    type:'bar',
+    data:{labels:d.labels,datasets:[{label:'Risk Score',data:d.scores,backgroundColor:d.colors,
+      borderColor:d.colors.map(c=>c.replace('0.85','1')),borderWidth:1,borderRadius:6,borderSkipped:false}]},
+    options:{responsive:true,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:ctx=>` Score: ${ctx.parsed.y}/100`}}},
+      scales:{y:{min:0,max:100,grid:{color:'rgba(0,229,255,0.04)'},ticks:{callback:v=>v+'%'}},
+              x:{grid:{display:false}}},animation:{duration:1200,easing:'easeOutQuart'}}
+  });
+}
+
+function renderDoughnut(d){
+  new Chart(document.getElementById('doughnutChart'),{
+    type:'doughnut',
+    data:{labels:d.labels,datasets:[{data:d.data,
+      backgroundColor:['rgba(255,41,82,.75)','rgba(255,140,0,.75)','rgba(0,255,163,.75)'],
+      borderColor:['#ff2952','#ff8c00','#00ffa3'],borderWidth:1,hoverOffset:8}]},
+    options:{responsive:true,cutout:'68%',
+      plugins:{legend:{position:'bottom',labels:{padding:16,usePointStyle:true,pointStyleWidth:8}},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.parsed} users`}}},
+      animation:{animateRotate:true,duration:1200}}
+  });
+}
+
+function renderRadar(d){
+  new Chart(document.getElementById('radarChart'),{
+    type:'radar',
+    data:{labels:d.labels,datasets:[{label:'Threat Level',data:d.data,
+      backgroundColor:'rgba(255,41,82,.1)',borderColor:'#ff2952',borderWidth:2,
+      pointBackgroundColor:'#ff2952',pointBorderColor:'#ff6b7a',pointRadius:4,pointHoverRadius:6}]},
+    options:{responsive:true,plugins:{legend:{display:false}},
+      scales:{r:{min:0,max:100,grid:{color:'rgba(0,229,255,0.06)'},
+        angleLines:{color:'rgba(0,229,255,0.06)'},ticks:{display:false},
+        pointLabels:{font:{size:10},color:'#6a9ab8'}}},
+      animation:{duration:1200}}
+  });
+}
+
+// ── System-wide score trend (all users latest score over time)
+function renderTrend(){
+  fetch('/api/scores').then(r=>r.json()).then(users=>{
+    if(!users.length) return;
+    const labels = users.map(u=>u.username);
+    const rule   = users.map(u=>u.score);
+    const ai     = users.map(u=>u.ai_score||0);
+
+    if(trendChartInst) trendChartInst.destroy();
+    trendChartInst = new Chart(document.getElementById('trendChart'),{
+      type:'line',
+      data:{labels,datasets:[
+        {label:'Rule Score',data:rule,borderColor:'#00e5ff',backgroundColor:'rgba(0,229,255,.08)',
+          borderWidth:2,tension:.4,pointRadius:4,pointHoverRadius:6,fill:true},
+        {label:'AI Score',data:ai,borderColor:'#b06bff',backgroundColor:'rgba(176,107,255,.06)',
+          borderWidth:2,tension:.4,pointRadius:4,pointHoverRadius:6,fill:true,borderDash:[5,3]}
+      ]},
+      options:{responsive:true,
+        plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true}}},
+        scales:{y:{min:0,max:100,grid:{color:'rgba(0,229,255,0.04)'}},x:{grid:{display:false}}},
+        animation:{duration:1200}}
+    });
+  });
+}
+
+// ── Color helpers
+function lvlColor(lvl){return lvl==='high'?'#ff2952':lvl==='medium'?'#ff8c00':'#00ffa3'}
+function avatarStyle(lvl){
+  if(lvl==='high')   return 'background:rgba(255,41,82,.12);border:1px solid rgba(255,41,82,.3);color:#ff2952';
+  if(lvl==='medium') return 'background:rgba(255,140,0,.1);border:1px solid rgba(255,140,0,.3);color:#ff8c00';
+  return 'background:rgba(0,255,163,.07);border:1px solid rgba(0,255,163,.2);color:#00ffa3';
+}
+
+// ── Modal
+function openModal(username){
+  document.getElementById('modalOverlay').classList.add('open');
+  document.getElementById('modal-uname').textContent = 'Loading...';
+
+  Promise.all([
+    fetch(`/api/user/${username}`).then(r=>r.json()),
+    fetch(`/api/trend/${username}`).then(r=>r.json())
+  ]).then(([d, trend])=>{
+    const lvl = d.risk_level||'low';
+
+    const av = document.getElementById('modal-avatar');
+    av.textContent = username[0].toUpperCase();
+    av.style.cssText = avatarStyle(lvl);
+
+    document.getElementById('modal-uname').innerHTML =
+      `${username} <span class="badge ${lvl}" style="vertical-align:middle;margin-left:8px"><span class="bdot"></span>${lvl.toUpperCase()}</span>`;
+    document.getElementById('modal-updated').textContent =
+      'Last updated: '+(d.last_updated?d.last_updated.slice(0,16):'N/A');
+
+    document.getElementById('m-score').textContent   = d.score+'/100';
+    document.getElementById('m-score').style.color   = lvlColor(lvl);
+    document.getElementById('m-ai-score').textContent= (d.ai_score||0)+'/100';
+    document.getElementById('m-failed').textContent  = d.stats.failed_logins;
+    document.getElementById('m-sens').textContent    = d.stats.sensitive_files;
+    document.getElementById('m-reason').textContent  = d.reason||'Normal behavior';
+
+    // Mini trend chart
+    if(modalTrendChartInst) modalTrendChartInst.destroy();
+    if(trend.length){
+      const tLabels = trend.map((_,i)=>`T${i+1}`);
+      const tRule   = trend.map(t=>t.score);
+      const tAI     = trend.map(t=>t.ai_score||0);
+      modalTrendChartInst = new Chart(document.getElementById('modalTrendChart'),{
+        type:'line',
+        data:{labels:tLabels,datasets:[
+          {label:'Rule',data:tRule,borderColor:'#00e5ff',borderWidth:1.5,tension:.4,pointRadius:2,fill:false},
+          {label:'AI',  data:tAI, borderColor:'#b06bff',borderWidth:1.5,tension:.4,pointRadius:2,fill:false,borderDash:[4,2]}
+        ]},
+        options:{responsive:true,animation:{duration:600},
+          plugins:{legend:{position:'bottom',labels:{padding:8,boxWidth:12}}},
+          scales:{y:{min:0,max:100,grid:{color:'rgba(0,229,255,0.04)'},ticks:{font:{size:9}}},
+                  x:{grid:{display:false},ticks:{font:{size:9}}}}}
+      });
+    }
+
+    // Login logs
+    const loginHtml = d.recent_logins.length
+      ? d.recent_logins.slice(0,6).map(l=>`
+          <div class="log-item">
+            <span class="log-tag ${l.status==='failed'?'failed':l.is_off_hours?'offhrs':'success'}">
+              ${l.status==='failed'?'FAIL':l.is_off_hours?'OFF-HRS':'OK'}
+            </span>
+            <span>${l.login_hour!==null?String(l.login_hour).padStart(2,'0')+':00':'N/A'}</span>
+            <span style="color:var(--txt3)">${l.ip_address||''}</span>
+            <span style="color:var(--txt3);margin-left:auto">${l.device||''}</span>
+          </div>`).join('')
+      : '<div class="no-data" style="padding:12px">No login records</div>';
+    document.getElementById('m-logins').innerHTML = loginHtml;
+
+    // File logs
+    const fileHtml = d.recent_files.length
+      ? d.recent_files.slice(0,5).map(f=>`
+          <div class="log-item">
+            <span class="log-tag ${f.is_sensitive?'sens':'normal'}">${f.is_sensitive?'SENS':f.action.toUpperCase()}</span>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${f.file_path}</span>
+          </div>`).join('')
+      : '<div class="no-data" style="padding:12px">No file records</div>';
+    document.getElementById('m-files-list').innerHTML = fileHtml;
+
+    // Privilege changes
+    document.getElementById('m-privs').innerHTML = d.privilege_changes.length
+      ? d.privilege_changes.map(p=>`
+          <div class="log-item">
+            <span class="log-tag failed">${p.change_type}</span>
+            <span>${p.old_value} → ${p.new_value}</span>
+          </div>`).join('')
+      : '<div style="font-family:\'JetBrains Mono\',monospace;font-size:10px;color:var(--txt3);padding:6px">No privilege changes</div>';
+
+  }).catch(e=>console.warn('Modal error:',e));
+}
+
+function closeModal(){document.getElementById('modalOverlay').classList.remove('open')}
+function closeModalOutside(e){if(e.target.id==='modalOverlay')closeModal()}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+
+// Auto refresh every 25 seconds
+setTimeout(()=>location.reload(), 25000);
+</script>
+</body>
+</html>
