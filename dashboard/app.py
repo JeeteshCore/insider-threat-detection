@@ -44,7 +44,7 @@ def ensure_scheduler():
             t.start()
             _scheduler_started = True
 
-ensure_scheduler()
+#ensure_scheduler()
 
 # ── Auth decorator ────────────────────────────────────────────
 
@@ -530,3 +530,27 @@ import os
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
+    @app.route('/demo-data')
+def demo_data():
+    from db.database import get_connection
+    conn = get_connection()
+
+    # Insert login events (suspicious)
+    for _ in range(15):
+        conn.execute("""
+        INSERT INTO login_events (username, status, login_hour, is_off_hours)
+        VALUES ('vikas', 'failed', 2, 1)
+        """)
+
+    # Insert file access events (sensitive)
+    for _ in range(15):
+        conn.execute("""
+        INSERT INTO file_access_events (username, file_path, is_sensitive)
+        VALUES ('rahul', '/secure/file.txt', 1)
+        """)
+
+    conn.commit()
+    conn.close()
+
+    return "✅ Demo data added successfully!"
