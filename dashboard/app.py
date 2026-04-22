@@ -22,6 +22,26 @@ app.permanent_session_lifetime = timedelta(hours=2)
 # ── Initialize DB on startup ──────────────────────────────────
 initialize_database()
 
+# ── Background Scheduler ──────────────────────────────────────
+_scheduler_started = False
+_scheduler_lock    = threading.Lock()
+
+def start_background_scheduler():
+    try:
+        from utils.scheduler import scheduler
+        scheduler.start(interval_seconds=30)
+        print("🔄 Background scheduler started — scanning every 30 seconds.")
+    except Exception as e:
+        print(f"⚠️ Scheduler start error: {e}")
+
+def ensure_scheduler():
+    global _scheduler_started
+    with _scheduler_lock:
+        if not _scheduler_started:
+            t = threading.Thread(target=start_background_scheduler, daemon=True)
+            t.start()
+            _scheduler_started = True
+
 # ── Auth decorator ────────────────────────────────────────────
 
 def login_required(f):
@@ -499,7 +519,6 @@ def export_pdf():
 # ── Startup: Seed demo data if DB empty ──────────────────────
 
 def _seed_demo_data():
-    """Seed users + simulate activity + calculate scores."""
     try:
         conn = get_connection()
         users_data = [
@@ -562,7 +581,6 @@ def _seed_demo_data():
 
         print("✅ Activity simulated.")
 
-        # Train AI model
         try:
             from models.anomaly_model import detector
             detector.train()
@@ -570,7 +588,6 @@ def _seed_demo_data():
         except Exception as e:
             print(f"⚠️ AI skipped: {e}")
 
-        # Score all users
         for user in all_users:
             try:
                 events = get_user_events_from_db(user)
@@ -603,6 +620,9 @@ def startup():
         _seed_demo_data()
     else:
         print(f"✅ DB has {count} records — ready.")
+
+    # ✅ Scheduler enable — live data updates har 30 sec
+    ensure_scheduler()
 
 
 # Run startup when app loads

@@ -1,4 +1,5 @@
-# utils/scheduler.py — Background Auto-Monitoring (Fixed)
+# utils/scheduler.py
+import schedule
 import time
 import threading
 import random
@@ -8,33 +9,26 @@ init(autoreset=True)
 
 class MonitoringScheduler:
     def __init__(self):
-        self.running  = False
-        self.thread   = None
-        self.interval = 5  # seconds between scans
+        self.running = False
+        self.thread  = None
 
-    def start(self, interval_seconds=5):
+    def start(self, interval_seconds=60):
         if self.running:
-            print(f"{Fore.YELLOW}⚠️  Scheduler already running.")
             return
-        self.interval = interval_seconds
-        self.running  = True
-        self.thread   = threading.Thread(target=self._loop, daemon=True, name="CyberShield-Monitor")
+        self.running = True
+        schedule.every(interval_seconds).seconds.do(self._monitor_cycle)
+        self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
-        print(f"{Fore.GREEN}🔄 Auto-monitor thread started — scanning every {interval_seconds}s")
+        print(f"🔄 Auto-monitor started (every {interval_seconds}s)")
 
     def stop(self):
         self.running = False
-        print(f"{Fore.YELLOW}⏹️  Auto-monitor stopped.")
+        schedule.clear()
 
     def _loop(self):
-        """Main loop — runs continuously in background."""
-        time.sleep(10)
         while self.running:
-            try:
-                self._monitor_cycle()
-            except Exception as e:
-                print(f"{Fore.RED}⚠️  Scheduler cycle error: {e}")
-            time.sleep(self.interval)
+            schedule.run_pending()
+            time.sleep(1)
 
     def _monitor_cycle(self):
         try:
@@ -43,65 +37,63 @@ class MonitoringScheduler:
                 simulate_login, simulate_file_access,
                 simulate_privilege_change, generate_and_store_risk
             )
-            from db.database import get_user_events_from_db, get_connection
+            from db.database import get_user_events_from_db
 
-            conn = get_connection()
-            user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-            conn.close()
+            all_users    = list(DEMO_USERS)
+            random.shuffle(all_users)
 
-            if user_count == 0:
-                print(f"{Fore.YELLOW}⚠️  No users in DB yet — skipping scan cycle.")
-                return
+            # Every cycle — randomly assign risk tiers
+            high_users   = all_users[:1]    # 1 high
+            medium_users = all_users[1:3]   # 2 medium
+            low_users    = all_users[3:]    # rest low
 
-            num_to_scan = random.randint(2, 3)
-            users_to_scan = random.sample(DEMO_USERS, min(num_to_scan, len(DEMO_USERS)))
+            print(f"\n🔄 CYCLE | HIGH:{high_users} | MED:{medium_users}")
 
-            suspicious = random.random() < 0.15
-            sus_user   = random.choice(users_to_scan) if suspicious else None
+            # Simulate 3 random users per cycle (not all — realistic)
+            selected = random.sample(all_users, 3)
 
-            print(f"\n{Fore.CYAN}🔄 Auto-scan cycle | Users: {', '.join(users_to_scan)}" +
-                  (f" | Suspicious: {sus_user}" if sus_user else ""))
+            for user in selected:
+                is_high   = user in high_users
+                is_medium = user in medium_users
 
-            for user in users_to_scan:
-                is_sus = (user == sus_user)
-                simulate_login(user, force_suspicious=is_sus)
-                simulate_file_access(user, force_suspicious=is_sus)
+                if is_high:
+                    simulate_login(user, force_suspicious=True)
+                    simulate_file_access(user, force_suspicious=True)
+                    if random.random() < 0.5:
+                        simulate_privilege_change(user)
+                elif is_medium:
+                    simulate_login(user, force_medium=True)
+                    simulate_file_access(user, force_medium=True)
+                else:
+                    simulate_login(user)
+                    simulate_file_access(user)
 
-                if is_sus and random.random() < 0.3:
-                    simulate_privilege_change(user)
-
-            if random.random() < 0.20:
-                try:
-                    from models.anomaly_model import detector
-                    detector.train()
-                    print(f"{Fore.CYAN}🤖 AI model retrained on latest data.")
-                except Exception as e:
-                    print(f"{Fore.YELLOW}⚠️  AI retrain skipped: {e}")
-
+            # Retrain AI + recalculate scores for ALL users
             try:
                 from models.anomaly_model import detector
-                ai_available = detector.is_trained
-            except Exception:
-                ai_available = False
+                detector.train()
+            except Exception as e:
+                print(f"⚠️ AI retrain skipped: {e}")
 
-            for user in users_to_scan:
-                events = get_user_events_from_db(user)
-                ai_score = 0
-                if ai_available:
+            for user in all_users:
+                try:
+                    events = get_user_events_from_db(user)
                     try:
                         from models.anomaly_model import detector
                         ai_score, _ = detector.predict(user)
                     except Exception:
                         ai_score = 0
-                events['ai_score'] = ai_score
-                generate_and_store_risk(user, events, ai_score=ai_score)
+                    events['ai_score'] = ai_score
+                    generate_and_store_risk(user, events, ai_score=ai_score)
+                except Exception as e:
+                    print(f"⚠️ Score error {user}: {e}")
 
-            print(f"{Fore.GREEN}✅ Scan cycle complete.")
+            print(f"✅ Cycle complete — scores updated!")
 
         except Exception as e:
-            print(f"{Fore.RED}⚠️  Monitor cycle failed: {e}")
+            print(f"❌ Scheduler error: {e}")
             import traceback
             traceback.print_exc()
 
-# Singleton — import and call .start() once
+# Singleton
 scheduler = MonitoringScheduler()
