@@ -4,7 +4,7 @@ from flask import (Flask, render_template, request, redirect,
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from datetime import datetime, timedelta
-import sys, os, csv, io, threading
+import sys, os, csv, io, threading, random
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -21,30 +21,6 @@ app.permanent_session_lifetime = timedelta(hours=2)
 
 # ── Initialize DB on startup ──────────────────────────────────
 initialize_database()
-
-# ── Auto-start background monitoring scheduler ────────────────
-def start_background_scheduler():
-    """Start continuous monitoring in a background thread."""
-    try:
-        from utils.scheduler import scheduler
-        scheduler.start(interval_seconds=30)  # scan every 30 seconds
-        print("🔄 Background scheduler started — scanning every 30 seconds.")
-    except Exception as e:
-        print(f"⚠️  Scheduler start error: {e}")
-
-# Start scheduler once using threading to avoid duplicate starts
-_scheduler_started = False
-_scheduler_lock = threading.Lock()
-
-def ensure_scheduler():
-    global _scheduler_started
-    with _scheduler_lock:
-        if not _scheduler_started:
-            t = threading.Thread(target=start_background_scheduler, daemon=True)
-            t.start()
-            _scheduler_started = True
-
-#ensure_scheduler()
 
 # ── Auth decorator ────────────────────────────────────────────
 
@@ -77,7 +53,6 @@ def login_page():
             if not user:
                 error = "Invalid username or password."
             else:
-                # Check lockout
                 if user.get('locked_until'):
                     try:
                         locked_dt = datetime.fromisoformat(user['locked_until'])
@@ -141,14 +116,15 @@ def signup():
             error = "Username already exists. Please choose another."
         else:
             try:
-                pw_hash = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
+                pw_hash = generate_password_hash(
+                    password, method='pbkdf2:sha256', salt_length=16
+                )
                 create_auth_user(username, email, pw_hash, role)
                 session.permanent = True
                 session['user']   = username
                 session['role']   = role
                 return redirect(url_for('home'))
             except Exception as e:
-                # Handle duplicate email
                 if 'UNIQUE' in str(e):
                     error = "Email already registered. Please use another email."
                 else:
@@ -167,7 +143,6 @@ def logout():
 def fetch_dashboard_data(search='', filter_level='all'):
     conn = get_connection()
 
-    # FIXED: Use parameterized queries to prevent SQL injection
     base_query = """
         SELECT username, score, ai_score, risk_level, reason, calculated_at AS timestamp
         FROM risk_scores
@@ -185,33 +160,31 @@ def fetch_dashboard_data(search='', filter_level='all'):
     base_query += " ORDER BY score DESC"
 
     users  = conn.execute(base_query, params).fetchall()
-
     alerts = conn.execute("""
         SELECT username, alert_type, message, severity, created_at AS timestamp
         FROM alerts ORDER BY id DESC LIMIT 20
     """).fetchall()
 
-    # Stats
-    total_users   = conn.execute("SELECT COUNT(DISTINCT username) FROM risk_scores").fetchone()[0]
-    high_risk     = conn.execute("""
+    total_users    = conn.execute("SELECT COUNT(DISTINCT username) FROM risk_scores").fetchone()[0]
+    high_risk      = conn.execute("""
         SELECT COUNT(*) FROM risk_scores WHERE risk_level='high'
         AND id IN (SELECT MAX(id) FROM risk_scores GROUP BY username)
     """).fetchone()[0]
-    medium_risk   = conn.execute("""
+    medium_risk    = conn.execute("""
         SELECT COUNT(*) FROM risk_scores WHERE risk_level='medium'
         AND id IN (SELECT MAX(id) FROM risk_scores GROUP BY username)
     """).fetchone()[0]
-    low_risk      = conn.execute("""
+    low_risk       = conn.execute("""
         SELECT COUNT(*) FROM risk_scores WHERE risk_level='low'
         AND id IN (SELECT MAX(id) FROM risk_scores GROUP BY username)
     """).fetchone()[0]
-    total_alerts  = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
-    total_events  = conn.execute("SELECT COUNT(*) FROM login_events").fetchone()[0]
-    failed_logins = conn.execute("SELECT COUNT(*) FROM login_events WHERE status='failed'").fetchone()[0]
-    off_hours     = conn.execute("SELECT COUNT(*) FROM login_events WHERE is_off_hours=1").fetchone()[0]
-    sensitive_hits= conn.execute("SELECT COUNT(*) FROM file_access_events WHERE is_sensitive=1").fetchone()[0]
-    priv_events   = conn.execute("SELECT COUNT(*) FROM privilege_events").fetchone()[0]
-    file_events   = conn.execute("SELECT COUNT(*) FROM file_access_events").fetchone()[0]
+    total_alerts   = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+    total_events   = conn.execute("SELECT COUNT(*) FROM login_events").fetchone()[0]
+    failed_logins  = conn.execute("SELECT COUNT(*) FROM login_events WHERE status='failed'").fetchone()[0]
+    off_hours      = conn.execute("SELECT COUNT(*) FROM login_events WHERE is_off_hours=1").fetchone()[0]
+    sensitive_hits = conn.execute("SELECT COUNT(*) FROM file_access_events WHERE is_sensitive=1").fetchone()[0]
+    priv_events    = conn.execute("SELECT COUNT(*) FROM privilege_events").fetchone()[0]
+    file_events    = conn.execute("SELECT COUNT(*) FROM file_access_events").fetchone()[0]
 
     conn.close()
 
@@ -341,9 +314,9 @@ def api_user_detail(username):
             "total_files":     file_total,
             "off_hours":       off_hrs_count,
         },
-        "recent_logins":      [dict(l) for l in logins],
-        "recent_files":       [dict(f) for f in files],
-        "privilege_changes":  [dict(p) for p in privs],
+        "recent_logins":     [dict(l) for l in logins],
+        "recent_files":      [dict(f) for f in files],
+        "privilege_changes": [dict(p) for p in privs],
     })
 
 
@@ -360,17 +333,15 @@ def api_trend(username):
     return jsonify([dict(r) for r in rows])
 
 
-# ── Live stats API for dashboard auto-refresh ─────────────────
 @app.route('/api/live-stats')
 @login_required
 def api_live_stats():
-    """Returns latest stats + user scores for dashboard live update (no full page reload)."""
     try:
         users, alerts, stats = fetch_dashboard_data()
         return jsonify({
-            "stats": stats,
-            "users": users,
-            "alerts": alerts[:5],  # latest 5 alerts
+            "stats":     stats,
+            "users":     users,
+            "alerts":    alerts[:5],
             "timestamp": datetime.now().strftime('%H:%M:%S')
         })
     except Exception as e:
@@ -400,8 +371,11 @@ def export_csv():
 
     response = make_response(output.getvalue())
     response.headers['Content-Type']        = 'text/csv'
-    response.headers['Content-Disposition'] = f'attachment; filename=cybershield_report_{datetime.now().strftime("%Y%m%d_%H%M")}.csv'
+    response.headers['Content-Disposition'] = (
+        f'attachment; filename=cybershield_{datetime.now().strftime("%Y%m%d_%H%M")}.csv'
+    )
     return response
+
 
 # ── Export PDF ────────────────────────────────────────────────
 
@@ -428,7 +402,6 @@ def export_pdf():
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.add_page()
 
-        # Header
         pdf.set_fill_color(5, 10, 15)
         pdf.rect(0, 0, 210, 40, 'F')
         pdf.set_text_color(0, 229, 255)
@@ -443,7 +416,6 @@ def export_pdf():
                  align='C', ln=True)
         pdf.ln(15)
 
-        # User Risk Table
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Helvetica", "B", 13)
         pdf.cell(0, 8, "User Risk Analysis", ln=True)
@@ -464,12 +436,11 @@ def export_pdf():
         for u in users:
             lvl = (u['risk_level'] or 'low').lower()
             if lvl == 'high':
-                pdf.set_fill_color(255, 230, 235); pdf.set_text_color(180, 0, 30)
+                pdf.set_fill_color(255,230,235); pdf.set_text_color(180,0,30)
             elif lvl == 'medium':
-                pdf.set_fill_color(255, 245, 225); pdf.set_text_color(160, 80, 0)
+                pdf.set_fill_color(255,245,225); pdf.set_text_color(160,80,0)
             else:
-                pdf.set_fill_color(230, 255, 245); pdf.set_text_color(0, 100, 60)
-
+                pdf.set_fill_color(230,255,245); pdf.set_text_color(0,100,60)
             reason_short = (u['reason'] or '')[:45] + ('...' if len(u['reason'] or '') > 45 else '')
             for val, w in zip([u['username'], str(u['score']), str(u['ai_score']),
                                 lvl.upper(), reason_short], col_w):
@@ -477,8 +448,6 @@ def export_pdf():
             pdf.ln()
 
         pdf.ln(8)
-
-        # Alerts
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Helvetica", "B", 13)
         pdf.cell(0, 8, "Recent Alerts", ln=True)
@@ -518,39 +487,129 @@ def export_pdf():
 
         response = make_response(pdf_bytes)
         response.headers['Content-Type']        = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename=cybershield_report_{datetime.now().strftime("%Y%m%d_%H%M")}.pdf'
+        response.headers['Content-Disposition'] = (
+            f'attachment; filename=cybershield_{datetime.now().strftime("%Y%m%d_%H%M")}.pdf'
+        )
         return response
 
     except Exception as e:
         return f"PDF generation error: {e}", 500
 
 
-import os
+# ── Startup: Seed demo data if DB empty ──────────────────────
+
+def _seed_demo_data():
+    """Seed users + simulate activity + calculate scores."""
+    try:
+        conn = get_connection()
+        users_data = [
+            ("vikas",     "admin",    "cybersecurity"),
+            ("amit",      "employee", "finance"),
+            ("priya",     "employee", "hr"),
+            ("rahul",     "employee", "development"),
+            ("sneha",     "employee", "marketing"),
+            ("admin",     "admin",    "it"),
+            ("dev_user",  "employee", "development"),
+            ("intern_01", "intern",   "general"),
+        ]
+        for u, r, d in users_data:
+            try:
+                conn.execute(
+                    "INSERT OR IGNORE INTO users (username,role,department) VALUES (?,?,?)",
+                    (u, r, d)
+                )
+            except Exception:
+                pass
+        conn.commit()
+        conn.close()
+        print("✅ Users seeded.")
+    except Exception as e:
+        print(f"❌ User seed error: {e}")
+        return
+
+    try:
+        from agent.monitor import (
+            simulate_login, simulate_file_access,
+            simulate_privilege_change, generate_and_store_risk
+        )
+        from db.database import get_user_events_from_db
+
+        DEMO_USERS   = ["vikas","amit","priya","rahul",
+                        "sneha","admin","dev_user","intern_01"]
+        all_users    = list(DEMO_USERS)
+        random.shuffle(all_users)
+        high_users   = all_users[:2]
+        medium_users = all_users[2:4]
+
+        print(f"🔴 HIGH:   {high_users}")
+        print(f"🟡 MEDIUM: {medium_users}")
+        print(f"🟢 LOW:    {all_users[4:]}")
+
+        for user in all_users:
+            is_high   = user in high_users
+            is_medium = user in medium_users
+            if is_high:
+                simulate_login(user, force_suspicious=True)
+                simulate_file_access(user, force_suspicious=True)
+                if random.random() < 0.7:
+                    simulate_privilege_change(user)
+            elif is_medium:
+                simulate_login(user, force_medium=True)
+                simulate_file_access(user, force_medium=True)
+            else:
+                simulate_login(user)
+                simulate_file_access(user)
+
+        print("✅ Activity simulated.")
+
+        # Train AI model
+        try:
+            from models.anomaly_model import detector
+            detector.train()
+            print("✅ AI model trained.")
+        except Exception as e:
+            print(f"⚠️ AI skipped: {e}")
+
+        # Score all users
+        for user in all_users:
+            try:
+                events = get_user_events_from_db(user)
+                try:
+                    from models.anomaly_model import detector
+                    ai_score, _ = detector.predict(user)
+                except Exception:
+                    ai_score = 0
+                events['ai_score'] = ai_score
+                generate_and_store_risk(user, events, ai_score=ai_score)
+            except Exception as e:
+                print(f"⚠️ Score error {user}: {e}")
+
+        print("🎉 Demo data seeding COMPLETE!")
+
+    except Exception as e:
+        print(f"❌ Simulation error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def startup():
+    initialize_database()
+    conn  = get_connection()
+    count = conn.execute("SELECT COUNT(*) FROM risk_scores").fetchone()[0]
+    conn.close()
+
+    if count == 0:
+        print("🔧 Empty DB — seeding demo data...")
+        _seed_demo_data()
+    else:
+        print(f"✅ DB has {count} records — ready.")
+
+
+# Run startup when app loads
+with app.app_context():
+    startup()
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-
-    @app.route('/demo-data')
-def demo_data():
-    from db.database import get_connection
-    conn = get_connection()
-
-    # Insert login events (suspicious)
-    for _ in range(15):
-        conn.execute("""
-        INSERT INTO login_events (username, status, login_hour, is_off_hours)
-        VALUES ('vikas', 'failed', 2, 1)
-        """)
-
-    # Insert file access events (sensitive)
-    for _ in range(15):
-        conn.execute("""
-        INSERT INTO file_access_events (username, file_path, is_sensitive)
-        VALUES ('rahul', '/secure/file.txt', 1)
-        """)
-
-    conn.commit()
-    conn.close()
-
-    return "✅ Demo data added successfully!"
