@@ -144,11 +144,13 @@ def signup():
                 session['user']   = username
                 session['role']   = role
                 return redirect(url_for('home'))
-            except Exception as e:
-                if 'UNIQUE' in str(e):
-                    error = "Email already registered. Please use another email."
-                else:
-                    error = "Registration failed. Please try again."
+          except Exception as e:
+    if 'UNIQUE' in str(e) and 'email' in str(e).lower():
+        error = "Email already registered. Please use another email."
+    elif 'UNIQUE' in str(e) and 'username' in str(e).lower():
+        error = "Username already exists. Please choose another."
+    else:
+        error = f"Registration error: {str(e)}"
 
     return render_template('login.html', error=error, active_tab='signup')
 
